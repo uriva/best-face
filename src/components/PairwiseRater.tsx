@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Face, Gender } from '@/lib/types';
-import { ArrowRight, Check, Sparkles, SlidersHorizontal, ListOrdered } from 'lucide-react';
+import { ArrowRight, Check, ListOrdered, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface PairwiseRaterProps {
   currentPair: [Face, Face] | null;
@@ -15,6 +15,8 @@ interface PairwiseRaterProps {
   onSwitchGender: (gender: Gender) => void;
   onProceedToUpload: () => void;
 }
+
+const REQUIRED_RANKINGS = 10;
 
 export function PairwiseRater({
   currentPair,
@@ -28,6 +30,10 @@ export function PairwiseRater({
 }: PairwiseRaterProps) {
   const [selectedSide, setSelectedSide] = useState<'left' | 'right' | null>(null);
   const [showPreferences, setShowPreferences] = useState<boolean>(false);
+
+  const remaining = Math.max(0, REQUIRED_RANKINGS - comparisonsCount);
+  const progressPercent = Math.min(100, Math.round((comparisonsCount / REQUIRED_RANKINGS) * 100));
+  const isReadyForMatch = comparisonsCount >= REQUIRED_RANKINGS;
 
   const handleSelect = useCallback(
     (winnerIndex: 0 | 1) => {
@@ -63,14 +69,12 @@ export function PairwiseRater({
   if (!currentPair) {
     return (
       <div className="max-w-md mx-auto py-20 text-center space-y-4">
-        <p className="text-xs font-mono text-neutral-500">Loading faces...</p>
+        <p className="text-xs font-mono text-neutral-500">Loading candidate pairs...</p>
       </div>
     );
   }
 
   const [leftFace, rightFace] = currentPair;
-  const minRequiredForMatch = 5;
-  const isReadyForMatch = comparisonsCount >= minRequiredForMatch;
 
   // Compute user's ranked faces list
   const rankedFacesList = userRankedIds
@@ -78,8 +82,48 @@ export function PairwiseRater({
     .filter((f): f is Face => f !== undefined && f.gender === targetGender);
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
-      {/* Top Controls & Category Switcher */}
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+      {/* Top Progress & Remaining Rankings Banner */}
+      <div className="border border-neutral-200 bg-white p-4 sm:p-5 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-black">
+              {comparisonsCount} of {REQUIRED_RANKINGS} rankings completed
+            </span>
+            {isReadyForMatch ? (
+              <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Target Reached!
+              </span>
+            ) : (
+              <span className="text-neutral-500">
+                • <strong className="text-black">{remaining} more {remaining === 1 ? 'ranking' : 'rankings'}</strong> to get your best match
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isReadyForMatch && (
+              <button
+                onClick={onProceedToUpload}
+                className="px-3.5 py-1 bg-black text-white hover:bg-neutral-800 transition-colors uppercase tracking-wider text-xs font-mono cursor-pointer animate-pulse"
+              >
+                Proceed to Photo Step →
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Minimal Progress Bar */}
+        <div className="w-full h-2 bg-neutral-100 border border-neutral-200 overflow-hidden">
+          <div
+            className="h-full bg-black transition-all duration-300 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Category Switcher & Preferences Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-neutral-200 pb-4">
         <div className="flex items-center gap-1 bg-neutral-100 p-1 border border-neutral-200 text-xs font-mono">
           <button
@@ -113,28 +157,30 @@ export function PairwiseRater({
             <span>My Rankings ({userRankedIds.length})</span>
           </button>
 
-          {isReadyForMatch && (
-            <button
-              onClick={onProceedToUpload}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-black text-white hover:bg-neutral-800 transition-all font-mono text-xs uppercase tracking-wider cursor-pointer shadow-2xs animate-pulse"
-            >
-              <span>Get Best Match</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={onProceedToUpload}
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 font-mono text-xs uppercase tracking-wider cursor-pointer transition-all ${
+              isReadyForMatch
+                ? 'bg-black text-white hover:bg-neutral-800'
+                : 'bg-white text-neutral-600 border border-neutral-300 hover:border-black hover:text-black'
+            }`}
+          >
+            <span>{isReadyForMatch ? 'Get Best Match' : 'Skip & Get Match'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
       {/* Rater Prompt */}
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-1">
         <span className="text-xs font-mono uppercase tracking-widest text-neutral-400">
-          Pairwise Comparison
+          Pairwise Choice
         </span>
         <h2 className="text-2xl sm:text-3xl font-light text-black tracking-tight">
           Which face do you prefer?
         </h2>
         <p className="text-xs font-mono text-neutral-500">
-          Click a face, or use keyboard keys <kbd className="px-1.5 py-0.5 bg-neutral-100 border border-neutral-200">←</kbd> and <kbd className="px-1.5 py-0.5 bg-neutral-100 border border-neutral-200">→</kbd>
+          Click a portrait, or press keyboard keys <kbd className="px-1.5 py-0.5 bg-neutral-100 border border-neutral-200 text-black">←</kbd> and <kbd className="px-1.5 py-0.5 bg-neutral-100 border border-neutral-200 text-black">→</kbd>
         </p>
       </div>
 
@@ -190,8 +236,8 @@ export function PairwiseRater({
             )}
 
             <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-xs font-mono text-neutral-400">
-              <span>Elo: {leftFace.rating}</span>
-              <span className="text-black group-hover:underline">Choose this face →</span>
+              <span>Personalized Rank: #{rankedFacesList.findIndex(f => f.id === leftFace.id) !== -1 ? rankedFacesList.findIndex(f => f.id === leftFace.id) + 1 : '—'}</span>
+              <span className="text-black group-hover:underline font-medium">Choose face →</span>
             </div>
           </div>
         </div>
@@ -246,46 +292,11 @@ export function PairwiseRater({
             )}
 
             <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-xs font-mono text-neutral-400">
-              <span>Elo: {rightFace.rating}</span>
-              <span className="text-black group-hover:underline">Choose this face →</span>
+              <span>Personalized Rank: #{rankedFacesList.findIndex(f => f.id === rightFace.id) !== -1 ? rankedFacesList.findIndex(f => f.id === rightFace.id) + 1 : '—'}</span>
+              <span className="text-black group-hover:underline font-medium">Choose face →</span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Progress & Call-to-action Footer */}
-      <div className="border border-neutral-200 p-4 sm:p-6 bg-neutral-50 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="space-y-1 text-center sm:text-left">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-semibold text-black uppercase">
-              Comparisons: {comparisonsCount}
-            </span>
-            {comparisonsCount >= minRequiredForMatch ? (
-              <span className="px-2 py-0.5 text-[10px] font-mono bg-emerald-100 text-emerald-800 border border-emerald-300">
-                Ready for Gale–Shapley
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 text-[10px] font-mono bg-neutral-200 text-neutral-700">
-                {minRequiredForMatch - comparisonsCount} more recommended
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-neutral-500 font-mono">
-            Each pairwise choice tunes your mathematical preference order.
-          </p>
-        </div>
-
-        <button
-          onClick={onProceedToUpload}
-          className={`w-full sm:w-auto px-6 py-3 text-xs font-mono tracking-widest uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            isReadyForMatch
-              ? 'bg-black text-white hover:bg-neutral-800 shadow-xs'
-              : 'bg-white text-neutral-600 border border-neutral-300 hover:border-black hover:text-black'
-          }`}
-        >
-          <span>{isReadyForMatch ? 'Proceed to Photo Step' : 'Skip to Match (Unlock)'}</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
       </div>
 
       {/* Live Rankings Drawer */}
@@ -293,16 +304,16 @@ export function PairwiseRater({
         <div className="border border-neutral-200 p-6 bg-white space-y-4 animate-in fade-in">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
             <h4 className="text-xs font-mono uppercase tracking-wider font-semibold text-black">
-              Your Subconscious Ranked Preferences
+              Your Personalized Ranked Preferences
             </h4>
             <span className="text-xs font-mono text-neutral-400">
-              Ranked #{rankedFacesList.length} Faces
+              {rankedFacesList.length} Faces Ranked
             </span>
           </div>
 
           {rankedFacesList.length === 0 ? (
             <p className="text-xs text-neutral-500 font-mono py-4 text-center">
-              Make a few pairwise comparisons above to see your live preference list.
+              Make pairwise comparisons above to see your live preference list.
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">

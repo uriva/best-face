@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import Image from 'next/image';
-import { Upload, Sparkles, User, Camera, ArrowLeft, ArrowRight, Loader2, Check } from 'lucide-react';
+import { Upload, Camera, ArrowLeft, ArrowRight, Loader2, User, AlertCircle } from 'lucide-react';
 import { Gender } from '@/lib/types';
 
 interface PhotoUploadStepProps {
@@ -20,19 +20,6 @@ interface PhotoUploadStepProps {
   }) => Promise<unknown>;
 }
 
-const SAMPLE_AVATARS: Record<Gender, string[]> = {
-  men: [
-    'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&q=80',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-  ],
-  women: [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-    'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&q=80',
-  ],
-};
-
 export function PhotoUploadStep({
   userGender,
   targetGender,
@@ -41,7 +28,7 @@ export function PhotoUploadStep({
   onBack,
   onSubmit,
 }: PhotoUploadStepProps) {
-  const [photoUrl, setPhotoUrl] = useState<string>(SAMPLE_AVATARS[userGender][0]);
+  const [photoUrl, setPhotoUrl] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [age, setAge] = useState<string>('26');
   const [city, setCity] = useState<string>('New York');
@@ -54,7 +41,12 @@ export function PhotoUploadStep({
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file (JPEG, PNG, WebP).');
+      setError('Please upload a valid image file (JPEG, PNG, WebP).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image is too large. Please upload an image under 10MB.');
       return;
     }
 
@@ -70,12 +62,12 @@ export function PhotoUploadStep({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
-      setError('Please enter your name.');
+    if (!photoUrl) {
+      setError('Please upload your photo to join the matching market.');
       return;
     }
-    if (!photoUrl) {
-      setError('Please upload or select a photo.');
+    if (!name.trim()) {
+      setError('Please enter your name.');
       return;
     }
 
@@ -108,20 +100,29 @@ export function PhotoUploadStep({
           Upload your photo
         </h2>
         <p className="text-xs font-mono text-neutral-500 max-w-md mx-auto">
-          The Gale-Shapley matching market requires your photo and profile to compute your mutual equilibrium match.
+          To enter the matching market and compute your mutual equilibrium match, please upload your real portrait.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="border border-neutral-200 p-6 sm:p-8 bg-white space-y-8">
         {/* Photo Upload Area */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           <label className="block text-xs font-mono uppercase tracking-wider font-semibold text-black">
-            Your Portrait
+            Your Photo *
           </label>
 
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="relative w-32 h-40 bg-neutral-100 border border-neutral-300 overflow-hidden shrink-0 group">
-              {photoUrl ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          {photoUrl ? (
+            <div className="flex flex-col sm:flex-row items-center gap-6 p-4 border border-neutral-200 bg-neutral-50">
+              <div className="relative w-32 h-40 bg-neutral-200 border border-neutral-300 overflow-hidden shrink-0">
                 <Image
                   src={photoUrl}
                   alt="Your portrait"
@@ -129,69 +130,44 @@ export function PhotoUploadStep({
                   sizes="128px"
                   className="object-cover"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-neutral-400">
-                  <User className="w-8 h-8" />
-                </div>
-              )}
+              </div>
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-[10px] font-mono cursor-pointer"
-              >
-                <Camera className="w-4 h-4" />
-                Change
-              </button>
-            </div>
-
-            <div className="space-y-3 flex-1 text-center sm:text-left">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 hover:border-black text-xs font-mono uppercase tracking-wider text-black bg-white hover:bg-neutral-50 transition-colors cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Upload Photo from Device
-              </button>
-
-              <div className="space-y-1">
-                <span className="text-[11px] font-mono text-neutral-400 block">
-                  Or pick a sample avatar:
-                </span>
-                <div className="flex items-center justify-center sm:justify-start gap-2">
-                  {SAMPLE_AVATARS[userGender].map((avatar, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setPhotoUrl(avatar)}
-                      className={`relative w-9 h-9 border overflow-hidden cursor-pointer ${
-                        photoUrl === avatar
-                          ? 'border-black ring-1 ring-black'
-                          : 'border-neutral-200 opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <Image
-                        src={avatar}
-                        alt={`Sample ${idx + 1}`}
-                        fill
-                        sizes="36px"
-                        className="object-cover"
-                      />
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-2 text-center sm:text-left">
+                <p className="text-xs font-mono text-emerald-700 font-semibold flex items-center justify-center sm:justify-start gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Photo uploaded successfully
+                </p>
+                <p className="text-xs text-neutral-500 font-mono">
+                  Your photo is ready for mutual evaluation in the matchmaking market.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-neutral-300 text-xs font-mono text-black hover:bg-white transition-colors cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  Change photo
+                </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-neutral-300 hover:border-black p-8 sm:p-12 text-center cursor-pointer transition-colors space-y-3 bg-neutral-50 hover:bg-neutral-100/50"
+            >
+              <div className="w-12 h-12 mx-auto bg-white border border-neutral-200 flex items-center justify-center text-neutral-600">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-black">
+                  Click to upload your photo or take a picture
+                </p>
+                <p className="text-xs font-mono text-neutral-400">
+                  PNG, JPG, or WebP up to 10MB
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Inputs */}
@@ -205,7 +181,7 @@ export function PhotoUploadStep({
               required
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Alex Morgan"
+              placeholder="e.g. Alex"
               className="w-full px-3 py-2 border border-neutral-300 text-sm focus:outline-none focus:border-black font-light"
             />
           </div>
@@ -232,7 +208,7 @@ export function PhotoUploadStep({
               type="text"
               value={city}
               onChange={e => setCity(e.target.value)}
-              placeholder="e.g. San Francisco / Remote"
+              placeholder="e.g. New York, Berlin, Tokyo"
               className="w-full px-3 py-2 border border-neutral-300 text-sm focus:outline-none focus:border-black font-light"
             />
           </div>
@@ -254,15 +230,16 @@ export function PhotoUploadStep({
               type="text"
               value={bio}
               onChange={e => setBio(e.target.value)}
-              placeholder="What are you about?"
+              placeholder="What are you passionate about?"
               className="w-full px-3 py-2 border border-neutral-300 text-sm focus:outline-none focus:border-black font-light"
             />
           </div>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-xs font-mono text-red-600">
-            {error}
+          <div className="p-3 bg-red-50 border border-red-200 text-xs font-mono text-red-600 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -280,11 +257,11 @@ export function PhotoUploadStep({
             {isComputing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Running Gale–Shapley...</span>
+                <span>Computing Market Matches...</span>
               </>
             ) : (
               <>
-                <span>Calculate Single Best Match</span>
+                <span>Enter Matching Market</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

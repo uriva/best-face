@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowRight, Sparkles, Upload, Shuffle, Heart, Award } from 'lucide-react';
+import { ArrowRight, Sparkles, Upload, Shuffle, Heart } from 'lucide-react';
 import { Gender } from '@/lib/types';
 
 interface LandingHeroProps {
@@ -99,7 +99,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStart, onOpenGaleSha
               Upload your photo
             </h3>
             <p className="text-xs leading-relaxed text-neutral-500">
-              Add your portrait and quick profile so the matching market can evaluate mutual preference compatibility between you and candidate faces.
+              Add your portrait and profile so the matching market can evaluate mutual preference compatibility between you and candidate faces.
             </p>
           </div>
 
@@ -124,19 +124,6 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStart, onOpenGaleSha
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Footnote statement */}
-        <div className="p-4 bg-neutral-50 border border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-neutral-600">
-          <span>
-            ⚡ Powered by InstantDB real-time data sync & Deno Next.js
-          </span>
-          <button
-            onClick={() => onStart('women')}
-            className="text-black font-semibold uppercase tracking-wider hover:underline inline-flex items-center gap-1 cursor-pointer"
-          >
-            Start now →
-          </button>
         </div>
       </div>
     </div>

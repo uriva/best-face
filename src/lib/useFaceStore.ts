@@ -7,8 +7,8 @@ import { calculateNewRatings, getNextPair } from './elo';
 import { runGaleShapley } from './galeShapley';
 import { db, id } from './instantClient';
 
-const SESSION_KEY = 'best_face_session_id_v2';
-const STATE_STORAGE_KEY = 'best_face_local_state_v2';
+const SESSION_KEY = 'best_face_session_id_v3';
+const STATE_STORAGE_KEY = 'best_face_local_state_v3';
 
 export function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return 'anon-server';
@@ -30,8 +30,10 @@ export function useFaceStore() {
   const [comparisonsCount, setComparisonsCount] = useState<number>(0);
   const [userRankedIds, setUserRankedIds] = useState<string[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userFace, setUserFace] = useState<Face | null>(null);
   const [matchResult, setMatchResult] = useState<GaleShapleyResult | null>(null);
   const [isComputingMatch, setIsComputingMatch] = useState<boolean>(false);
+  const [incomingEvaluationsCount, setIncomingEvaluationsCount] = useState<number>(0);
   const [history, setHistory] = useState<Comparison[]>([]);
 
   // 1. Initialize session and restore any local progress
@@ -51,7 +53,9 @@ export function useFaceStore() {
         if (parsed.comparisonsCount) setComparisonsCount(parsed.comparisonsCount);
         if (parsed.userRankedIds) setUserRankedIds(parsed.userRankedIds);
         if (parsed.userProfile) setUserProfile(parsed.userProfile);
+        if (parsed.userFace) setUserFace(parsed.userFace);
         if (parsed.matchResult) setMatchResult(parsed.matchResult);
+        if (parsed.incomingEvaluationsCount) setIncomingEvaluationsCount(parsed.incomingEvaluationsCount);
       }
     } catch {
       // Ignore parse error
@@ -71,24 +75,24 @@ export function useFaceStore() {
           comparisonsCount,
           userRankedIds,
           userProfile,
+          userFace,
           matchResult,
+          incomingEvaluationsCount,
         })
       );
     } catch {
       // Storage full or unavailable
     }
-  }, [sessionId, targetGender, userGender, faces, comparisonsCount, userRankedIds, userProfile, matchResult]);
+  }, [sessionId, targetGender, userGender, faces, comparisonsCount, userRankedIds, userProfile, userFace, matchResult, incomingEvaluationsCount]);
 
-  // 2. Query InstantDB to sync real-time community face ratings if available
+  // 2. Query InstantDB to sync real-time community face ratings
   const { data: instantData } = db.useQuery({
     faces: {},
     comparisons: {},
   });
 
-  // Merge InstantDB faces if they exist, or seed if empty
   useEffect(() => {
     if (instantData?.faces && instantData.faces.length > 0) {
-      // Merge remote ratings with local faces
       setFaces(prevFaces => {
         const remoteMap = new Map((instantData.faces as unknown as Face[]).map(f => [f.id, f]));
         return prevFaces.map(f => {
@@ -180,7 +184,6 @@ export function useFaceStore() {
         } else if (loseIdx === -1) {
           next.push(loserId);
         } else if (winIdx > loseIdx) {
-          // Move winner ahead of loser
           next.splice(winIdx, 1);
           next.splice(loseIdx, 0, winnerId);
         }
@@ -201,7 +204,7 @@ export function useFaceStore() {
         return next;
       });
 
-      // Transact to InstantDB asynchronously (non-blocking)
+      // Transact to InstantDB
       try {
         db.transact([
           db.tx.comparisons[comparisonId].create({
@@ -221,12 +224,8 @@ export function useFaceStore() {
             losses: loser.losses + 1,
             comparisonsCount: loser.comparisonsCount + 1,
           }),
-        ]).catch(() => {
-          // Tolerant to offline/dev
-        });
-      } catch {
-        // Fallback gracefully
-      }
+        ]).catch(() => {});
+      } catch {}
     },
     [faces, targetGender, sessionId]
   );
@@ -241,33 +240,27 @@ export function useFaceStore() {
     []
   );
 
-  // 6. Compute Gale-Shapley Match
-  const computeSingleBestMatch = useCallback(
-    async (profile: {
+  // 6. Register user profile and face in the matching pool
+  const registerProfile = useCallback(
+    (profile: {
       name: string;
       photoUrl: string;
       age?: number;
       city?: string;
       bio?: string;
     }) => {
-      setIsComputingMatch(true);
-
-      const candidateFaces = faces.filter(f => f.gender === targetGender && !f.isUser);
-      const oppositeFaces = faces.filter(f => f.gender === userGender && !f.isUser);
-
-      // Build user face representation
       const userFaceId = `user-${sessionId || id()}`;
       const newUserFace: Face = {
         id: userFaceId,
         name: profile.name,
         gender: userGender,
         imageUrl: profile.photoUrl,
-        rating: 1600, // Standard starting rating
-        comparisonsCount: comparisonsCount,
-        wins: Math.round(comparisonsCount * 0.7),
-        losses: Math.round(comparisonsCount * 0.3),
+        rating: 1550,
+        comparisonsCount: 0,
+        wins: 0,
+        losses: 0,
         age: profile.age || 26,
-        bio: profile.bio || 'Best Face Explorer',
+        bio: profile.bio || '',
         city: profile.city || 'Global',
         isUser: true,
         userSessionId: sessionId,
@@ -287,33 +280,98 @@ export function useFaceStore() {
         createdAt: Date.now(),
       };
 
+      setUserFace(newUserFace);
       setUserProfile(newUserProfile);
 
-      // Run Gale-Shapley algorithm
-      const result = runGaleShapley(
-        newUserProfile,
-        newUserFace,
-        candidateFaces,
-        oppositeFaces
-      );
+      // Add user to faces pool
+      setFaces(prev => [newUserFace, ...prev.filter(f => f.id !== userFaceId)]);
 
-      // Simulated computation delay for pleasant visual reveal
-      await new Promise(resolve => setTimeout(resolve, 1400));
+      // Publish to InstantDB
+      try {
+        db.transact([
+          db.tx.faces[userFaceId].create({
+            name: profile.name,
+            gender: userGender,
+            imageUrl: profile.photoUrl,
+            rating: 1550,
+            comparisonsCount: 0,
+            wins: 0,
+            losses: 0,
+            age: profile.age || 26,
+            bio: profile.bio || '',
+            city: profile.city || 'Global',
+            isUser: true,
+            userSessionId: sessionId,
+            createdAt: Date.now(),
+          }),
+        ]).catch(() => {});
+      } catch {}
+
+      return { newUserProfile, newUserFace };
+    },
+    [sessionId, userGender, targetGender, userRankedIds]
+  );
+
+  // 7. Compute Gale-Shapley Match via Backend API
+  const computeSingleBestMatch = useCallback(
+    async (profileOverride?: UserProfile, faceOverride?: Face) => {
+      setIsComputingMatch(true);
+
+      const targetProfile = profileOverride || userProfile;
+      const targetFace = faceOverride || userFace;
+
+      if (!targetProfile || !targetFace) {
+        setIsComputingMatch(false);
+        return null;
+      }
+
+      let result: GaleShapleyResult | null = null;
+
+      try {
+        // Call backend matching endpoint
+        const res = await fetch('/api/match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userProfile: targetProfile,
+            userFace: targetFace,
+            communityFaces: faces,
+            incomingRankingsCount: 5,
+            forceSimulation: true,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.result) {
+            result = data.result;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend API matching fallback to client:', err);
+      }
+
+      // If backend call failed or fallback needed:
+      if (!result) {
+        const candidateFaces = faces.filter(f => f.gender === targetGender && !f.isUser);
+        const oppositeFaces = faces.filter(f => f.gender === userGender && !f.id.startsWith('user-'));
+        result = runGaleShapley(targetProfile, targetFace, candidateFaces, oppositeFaces);
+      }
 
       setMatchResult(result);
       setIsComputingMatch(false);
 
-      // Store match in InstantDB
-      if (result.userMatch) {
+      // Persist in InstantDB
+      if (result && result.userMatch) {
         try {
           const matchId = id();
           db.transact([
             db.tx.userProfiles[sessionId || id()].create({
               sessionId: sessionId || 'anon',
-              name: profile.name,
+              name: targetProfile.name,
               gender: userGender,
               targetGender: targetGender,
-              photoUrl: profile.photoUrl,
+              photoUrl: targetProfile.photoUrl,
               preferences: userRankedIds,
               matchedFaceId: result.userMatch.id,
               matchedAt: Date.now(),
@@ -328,29 +386,27 @@ export function useFaceStore() {
               explanation: `Gale-Shapley stable match: You ranked ${result.userMatch.name} #${result.userRankForPartner}, and they ranked you #${result.partnerRankForUser} in their pool.`,
               createdAt: Date.now(),
             }),
-          ]).catch(() => {
-            // Tolerant to offline/dev
-          });
-        } catch {
-          // Graceful fallback
-        }
+          ]).catch(() => {});
+        } catch {}
       }
 
       return result;
     },
-    [faces, targetGender, userGender, sessionId, comparisonsCount, userRankedIds]
+    [userProfile, userFace, faces, targetGender, userGender, sessionId, userRankedIds]
   );
 
-  // 7. Reset all progress
+  // 8. Reset all progress
   const resetAll = useCallback(() => {
     localStorage.removeItem(STATE_STORAGE_KEY);
     setFaces(INITIAL_CURATED_FACES);
     setComparisonsCount(0);
     setUserRankedIds([]);
     setUserProfile(null);
+    setUserFace(null);
     setMatchResult(null);
     setRecentPairKeys(new Set());
     setHistory([]);
+    setIncomingEvaluationsCount(0);
     const sId = `usr_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
     setSessionId(sId);
     localStorage.setItem(SESSION_KEY, sId);
@@ -366,12 +422,15 @@ export function useFaceStore() {
     comparisonsCount,
     userRankedIds,
     userProfile,
+    userFace,
     matchResult,
     isComputingMatch,
+    incomingEvaluationsCount,
     history,
     vote,
     switchTargetGender,
     setUserGender,
+    registerProfile,
     computeSingleBestMatch,
     resetAll,
     setTargetGender,

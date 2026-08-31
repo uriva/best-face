@@ -6,12 +6,13 @@ import { Navbar } from '@/components/Navbar';
 import { LandingHero } from '@/components/LandingHero';
 import { PairwiseRater } from '@/components/PairwiseRater';
 import { PhotoUploadStep } from '@/components/PhotoUploadStep';
+import { MarketQueueView } from '@/components/MarketQueueView';
 import { MatchResultView } from '@/components/MatchResultView';
 import { GaleShapleyModal } from '@/components/GaleShapleyModal';
 import { LeaderboardModal } from '@/components/LeaderboardModal';
 import { Gender } from '@/lib/types';
 
-type ScreenState = 'landing' | 'rate' | 'upload' | 'match';
+type ScreenState = 'landing' | 'rate' | 'upload' | 'queue' | 'match';
 
 export default function Home() {
   const {
@@ -22,10 +23,13 @@ export default function Home() {
     comparisonsCount,
     userRankedIds,
     userProfile,
+    userFace,
     matchResult,
     isComputingMatch,
+    incomingEvaluationsCount,
     vote,
     switchTargetGender,
+    registerProfile,
     computeSingleBestMatch,
     resetAll,
   } = useFaceStore();
@@ -57,15 +61,22 @@ export default function Home() {
     }
   };
 
-  const handleCalculateMatch = async (profile: {
+  const handleProfileSubmit = async (profileData: {
     name: string;
     photoUrl: string;
     age?: number;
     city?: string;
     bio?: string;
   }) => {
-    await computeSingleBestMatch(profile);
-    setCurrentScreen('match');
+    const { newUserProfile, newUserFace } = registerProfile(profileData);
+    setCurrentScreen('queue');
+  };
+
+  const handleQueueReady = async () => {
+    const res = await computeSingleBestMatch();
+    if (res) {
+      setCurrentScreen('match');
+    }
   };
 
   return (
@@ -106,7 +117,18 @@ export default function Home() {
             comparisonsCount={comparisonsCount}
             isComputing={isComputingMatch}
             onBack={() => setCurrentScreen('rate')}
-            onSubmit={handleCalculateMatch}
+            onSubmit={handleProfileSubmit}
+          />
+        )}
+
+        {currentScreen === 'queue' && userProfile && userFace && (
+          <MarketQueueView
+            userProfile={userProfile}
+            userFace={userFace}
+            incomingEvaluationsCount={incomingEvaluationsCount || 1}
+            requiredEvaluations={5}
+            onReadyToCompute={handleQueueReady}
+            onSimulateIncoming={() => {}}
           />
         )}
 
@@ -142,7 +164,6 @@ export default function Home() {
             >
               Faces Leaderboard
             </button>
-            <span>Deno + InstantDB</span>
           </div>
         </div>
       </footer>
