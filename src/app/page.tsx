@@ -1,69 +1,163 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+import { useFaceStore } from '@/lib/useFaceStore';
+import { Navbar } from '@/components/Navbar';
+import { LandingHero } from '@/components/LandingHero';
+import { PairwiseRater } from '@/components/PairwiseRater';
+import { PhotoUploadStep } from '@/components/PhotoUploadStep';
+import { MatchResultView } from '@/components/MatchResultView';
+import { GaleShapleyModal } from '@/components/GaleShapleyModal';
+import { LeaderboardModal } from '@/components/LeaderboardModal';
+import { Gender } from '@/lib/types';
+
+type ScreenState = 'landing' | 'rate' | 'upload' | 'match';
 
 export default function Home() {
+  const {
+    targetGender,
+    userGender,
+    faces,
+    currentPair,
+    comparisonsCount,
+    userRankedIds,
+    userProfile,
+    matchResult,
+    isComputingMatch,
+    vote,
+    switchTargetGender,
+    computeSingleBestMatch,
+    resetAll,
+  } = useFaceStore();
+
+  const [currentScreen, setCurrentScreen] = useState<ScreenState>('landing');
+  const [isGaleShapleyOpen, setIsGaleShapleyOpen] = useState<boolean>(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
+
+  // If a match already exists on resume, show match screen
+  React.useEffect(() => {
+    if (matchResult && userProfile && currentScreen === 'landing') {
+      setCurrentScreen('match');
+    }
+  }, [matchResult, userProfile, currentScreen]);
+
+  const handleStartFromLanding = (selectedTarget: Gender) => {
+    switchTargetGender(selectedTarget);
+    setCurrentScreen('rate');
+  };
+
+  const handleGoHome = () => {
+    setCurrentScreen('landing');
+  };
+
+  const handleResetSession = () => {
+    if (window.confirm('Reset all ratings and start a fresh matching session?')) {
+      resetAll();
+      setCurrentScreen('landing');
+    }
+  };
+
+  const handleCalculateMatch = async (profile: {
+    name: string;
+    photoUrl: string;
+    age?: number;
+    city?: string;
+    bio?: string;
+  }) => {
+    await computeSingleBestMatch(profile);
+    setCurrentScreen('match');
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="min-h-screen bg-white text-neutral-900 flex flex-col selection:bg-black selection:text-white font-sans">
+      <Navbar
+        onOpenGaleShapley={() => setIsGaleShapleyOpen(true)}
+        onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+        onReset={handleResetSession}
+        onGoHome={handleGoHome}
+        comparisonsCount={comparisonsCount}
+      />
+
+      <main className="flex-1 flex flex-col justify-center">
+        {currentScreen === 'landing' && (
+          <LandingHero
+            onStart={handleStartFromLanding}
+            onOpenGaleShapley={() => setIsGaleShapleyOpen(true)}
+          />
+        )}
+
+        {currentScreen === 'rate' && (
+          <PairwiseRater
+            currentPair={currentPair}
+            targetGender={targetGender}
+            comparisonsCount={comparisonsCount}
+            userRankedIds={userRankedIds}
+            faces={faces}
+            onVote={vote}
+            onSwitchGender={switchTargetGender}
+            onProceedToUpload={() => setCurrentScreen('upload')}
+          />
+        )}
+
+        {currentScreen === 'upload' && (
+          <PhotoUploadStep
+            userGender={userGender}
+            targetGender={targetGender}
+            comparisonsCount={comparisonsCount}
+            isComputing={isComputingMatch}
+            onBack={() => setCurrentScreen('rate')}
+            onSubmit={handleCalculateMatch}
+          />
+        )}
+
+        {currentScreen === 'match' && matchResult && userProfile && (
+          <MatchResultView
+            result={matchResult}
+            userProfile={userProfile}
+            onRestart={handleResetSession}
+            onOpenGaleShapleyModal={() => setIsGaleShapleyOpen(true)}
+            onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+          />
+        )}
       </main>
+
+      {/* Ultra-clean minimalist footer */}
+      <footer className="border-t border-neutral-200 py-8 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-neutral-500">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-black">BEST FACE</span>
+            <span>• Single Mutual Match Engine</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setIsGaleShapleyOpen(true)}
+              className="hover:text-black transition-colors cursor-pointer"
+            >
+              Gale–Shapley Theory
+            </button>
+            <button
+              onClick={() => setIsLeaderboardOpen(true)}
+              className="hover:text-black transition-colors cursor-pointer"
+            >
+              Faces Leaderboard
+            </button>
+            <span>Deno + InstantDB</span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Modals */}
+      <GaleShapleyModal
+        isOpen={isGaleShapleyOpen}
+        onClose={() => setIsGaleShapleyOpen(false)}
+      />
+
+      <LeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        faces={faces}
+      />
     </div>
   );
 }
