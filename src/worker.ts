@@ -13,7 +13,9 @@ export const worker = {
   fetch: async (req: Request, env: WorkerEnv) => {
     const url = new URL(req.url);
     if (url.pathname === "/api/match" && req.method === "POST") {
-      return await handleMatch(new NextRequest(req.url, req));
+      return await handleMatch(
+        Object.assign(req, { nextUrl: url }) as unknown as NextRequest,
+      );
     }
     if (env.ASSETS) {
       return await env.ASSETS.fetch(req);
