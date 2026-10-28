@@ -1,10 +1,15 @@
 {
   "tasks": {
     "dev": "deno run -A --node-modules-dir npm:next dev",
-    "build": "deno run -A --node-modules-dir npm:next build",
+    "build": "deno run -A scripts/buildWorker.ts",
+    "deploy": "npx wrangler deploy",
     "start": "deno run -A --node-modules-dir npm:next start",
     "lint": "deno run -A --node-modules-dir npm:eslint",
     "test": "deno test -A --node-modules-dir"
+  },
+  "imports": {
+    "@/": "./src/",
+    "next/server": "./src/worker/nextServerShim.ts"
   },
   "nodeModulesDir": "auto",
   "minimumDependencyAge": 0,
@@ -29,10 +34,6 @@
     "paths": {
       "@/*": ["./src/*"]
     }
-  },
-  "deploy": {
-    "org": "uriva",
-    "app": "best-face"
   }
 }
 
